@@ -1,6 +1,47 @@
 import XCTest
 @testable import CleanerCore
 
+extension CatalogTests {
+    func testModernMountAndClaimedTypesAreParsed() throws {
+        let parsed = try parseOne("""
+        --------
+        bundle id: Example (0x123)
+        container: / (0x4)
+        mount state: mounted
+        path: /Users/fixture/Applications/Example.app (0x99)
+        identifier: org.example.cleanerfixture
+        claimed UTIs: public.text, org.example.document
+        claimed schemes: owc-fixture
+        Bundle node not found on disk
+        """)
+        XCTAssertEqual(parsed.containerPath, "/")
+        XCTAssertEqual(parsed.containerMountState, "mounted")
+        XCTAssertEqual(parsed.bindings, ["public.text", "org.example.document", "owc-fixture:"])
+        XCTAssertTrue(CleanupPolicy.classify(parsed, presence: .missing).canClean)
+    }
+
+    func testModernContainerAtCustomLocationIsRetained() throws {
+        let parsed = try parseOne("""
+        --------
+        bundle id: Example (0x123)
+        container: /Users/fixture/ExternalDisk (0x4)
+        mount state: mounted
+        path: /Users/fixture/ExternalDisk/Example.app
+        identifier: org.example.cleanerfixture
+        Bundle node not found on disk
+        """)
+        XCTAssertEqual(CleanupPolicy.classify(parsed, presence: .missing).status, .unavailable)
+    }
+
+    func testNumericApplicationNameStillUsesHexRecordIdentity() throws {
+        let first = try parseOne(dump(id: "360 (0x123)"))
+        let changed = try parseOne(dump(id: "360 (0x124)"))
+        XCTAssertEqual(first.recordID, "0x123")
+        XCTAssertThrowsError(try CleanupPolicy.revalidate(first,
+            current: [CleanupPolicy.classify(changed, presence: .missing)]))
+    }
+}
+
 final class CatalogTests: XCTestCase {
     private let localPath = "/Users/fixture/Applications/Example.app"
     private let identifier = "org.example.cleanerfixture"
@@ -82,7 +123,7 @@ final class CatalogTests: XCTestCase {
         Bundle node not found on disk
         """
         let parsed = try parseOne(fixture)
-        XCTAssertEqual(parsed.recordID, "42")
+        XCTAssertEqual(parsed.recordID, "0xABcd1234")
         XCTAssertEqual(parsed.path, localPath)
         XCTAssertEqual(parsed.bundleIdentifier, identifier)
         XCTAssertNil(parsed.parseIssue)

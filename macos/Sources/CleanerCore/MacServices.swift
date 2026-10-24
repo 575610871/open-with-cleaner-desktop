@@ -63,6 +63,9 @@ public enum CommandRunner {
 public enum LocalPathProbe {
     public static func inspect(_ path: String) -> PathPresence {
         guard CleanupPolicy.pathProblem(path) == nil else { return .unknown("路径结构无法确认") }
+        if ["/Volumes", "/Network", "/net", "/home"].contains(where: { path.hasPrefix($0 + "/") }) {
+            return .unavailable("外部卷或网络路径，本版不访问或清理")
+        }
         var prefix = ""
         let components = path.split(separator: "/")
         for (index, component) in components.enumerated() {
@@ -90,7 +93,7 @@ public enum LocalPathProbe {
                             .volumeIsRemovableKey, .volumeIsEjectableKey])
                         guard volume.volumeIsLocal == true,
                               volume.volumeIsRemovable != true, volume.volumeIsEjectable != true,
-                              let volumeRoot = volume.volumeURL?.path,
+                              let volumeRoot = volume.volume?.path,
                               ["/", "/System/Volumes/Data"].contains(volumeRoot) else {
                             return .unavailable("应用父目录不在已确认的系统本地卷，本版保留")
                         }

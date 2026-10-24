@@ -91,11 +91,11 @@ public enum DumpParser {
             let strippedID = removeAddressSuffix(rawID)
             let recordID: String
             var issue: String?
-            if !strippedID.isEmpty && strippedID.allSatisfy({ $0.isNumber }) { recordID = strippedID }
-            else if rawID.range(of: #"^.+\s+\(0x[0-9a-fA-F]{1,16}\)$"#, options: .regularExpression) != nil,
+            if rawID.range(of: #"^.+\s+\(0x[0-9a-fA-F]{1,16}\)$"#, options: .regularExpression) != nil,
                     let hex = rawID.range(of: #"0x[0-9a-fA-F]{1,16}(?=\)$)"#, options: .regularExpression) {
                 recordID = String(rawID[hex])
-            } else { recordID = strippedID; issue = "无法识别系统记录编号" }
+            } else if !strippedID.isEmpty && strippedID.allSatisfy({ $0.isNumber }) { recordID = strippedID }
+            else { recordID = strippedID; issue = "无法识别系统记录编号" }
             if fields["identifier", default: []].count != 1 ||
                 identifier.range(of: #"^[A-Za-z0-9][A-Za-z0-9._-]*$"#, options: .regularExpression) == nil ||
                 identifier.lowercased() == "null" { issue = "应用标识缺失或有歧义" }
