@@ -58,6 +58,8 @@ bash macos/scripts/build.sh
 
 构建输出在 `macos/dist/`，包含通用 `.app`、ZIP 和 SHA-256 校验文件。
 
+0.1.0 已在 GitHub 的 Intel 与 Apple Silicon macOS 15 环境通过 56 项核心测试、3 项系统集成测试，以及同一通用 ZIP 的签名校验和原生启动扫描验证。真实清理测试创建、注册、删除并注销唯一测试应用，没有使用模拟清理结果替代系统验证。[构建与测试记录](https://github.com/575610871/open-with-cleaner-desktop/actions/runs/40119467763)。最低部署目标为 macOS 13；并未逐个实测所有 macOS 版本。
+
 ## 系统兼容边界
 
 扫描和定向注销使用 macOS 自带的 `lsregister`。它不是 Apple 承诺稳定的公开解析接口，系统升级可能改变输出或行为。程序采取保守规则：不能确认就保留，不以全库重建作为失败后的自动兜底。系统服务、软件更新和重新安装仍可能产生新注册记录。

@@ -11,7 +11,13 @@
 
 **macOS 版：** 原生 SwiftUI 版本位于 [macos/](macos/README.md)，使用相同苏芳配色。它检查 Launch Services 的应用记录，只定向注销确认失效的本地路径。Mac 版保存操作记录，不提供 Windows 版的注册表备份恢复；两个平台分别构建与编号。
 
-![示例界面](docs/preview.png)
+Windows 界面：
+
+![Windows 示例界面](docs/preview.png)
+
+macOS 原生界面（隔离构建环境中的实际运行截图）：
+
+![macOS 原生界面](docs/preview-macos.png)
 
 ## Windows 版功能
 
