@@ -1,14 +1,19 @@
 # Open With Cleaner Desktop Suoh Edition
 
-一个带有苏芳配色的 Windows「打开方式」管理工具。选择桌面应用，预览它的文件关联候选，备份后清理，并在需要时恢复。
+一个带有苏芳配色的 Windows 与 macOS「打开方式」管理工具。两个平台使用各自的原生机制：Windows 版管理注册表中的桌面应用候选并提供逐项备份恢复；macOS 版检查 Launch Services，只定向注销确认失效的本地应用记录。
 
-**[下载 Windows v1.3.0 便携版](https://github.com/575610871/open-with-cleaner-desktop/releases/tag/v1.3.0)**
+**[下载与版本说明：Windows + macOS](https://github.com/575610871/open-with-cleaner-desktop/releases/tag/v1.3.0)**
+
+| 平台 | 版本 | 下载 |
+| --- | --- | --- |
+| Windows 10 / 11 | 1.3.0 | [Windows 便携 ZIP](https://github.com/575610871/open-with-cleaner-desktop/releases/download/v1.3.0/open-with-cleaner-desktop-suoh-edition-1.3.0-win-portable.zip) |
+| macOS 13+ · Apple Silicon / Intel | 0.1.0 | [macOS 通用 ZIP](https://github.com/575610871/open-with-cleaner-desktop/releases/download/v1.3.0/open-with-cleaner-desktop-suoh-edition-0.1.0-macos-universal.zip) |
 
 **macOS 版：** 原生 SwiftUI 版本位于 [macos/](macos/README.md)，使用相同苏芳配色。它检查 Launch Services 的应用记录，只定向注销确认失效的本地路径。Mac 版保存操作记录，不提供 Windows 版的注册表备份恢复；两个平台分别构建与编号。
 
 ![示例界面](docs/preview.png)
 
-## 功能
+## Windows 版功能
 
 - 搜索应用名称或 EXE 文件名，或手动选择程序。
 - 默认显示能找到实际程序文件的已注册应用；失效或无法确认的旧记录可单独查看。

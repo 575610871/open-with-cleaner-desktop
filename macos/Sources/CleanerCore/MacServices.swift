@@ -80,7 +80,23 @@ public enum LocalPathProbe {
                 if Darwin.access(prefix, X_OK) != 0 { return .unknown("无权访问路径父目录") }
             } else {
                 let code = errno
-                if code == ENOENT { return .missing }
+                if code == ENOENT {
+                    guard index == components.count - 1 else {
+                        return .unknown("应用的父目录也已不存在，无法排除容器或挂载位置变化")
+                    }
+                    do {
+                        let parent = URL(fileURLWithPath: path).deletingLastPathComponent()
+                        let volume = try parent.resourceValues(forKeys: [.volumeURLKey, .volumeIsLocalKey,
+                            .volumeIsRemovableKey, .volumeIsEjectableKey])
+                        guard volume.volumeIsLocal == true,
+                              volume.volumeIsRemovable != true, volume.volumeIsEjectable != true,
+                              let volumeRoot = volume.volumeURL?.path,
+                              ["/", "/System/Volumes/Data"].contains(volumeRoot) else {
+                            return .unavailable("应用父目录不在已确认的系统本地卷，本版保留")
+                        }
+                        return .missing
+                    } catch { return .unknown("无法核对应用父目录所在的卷") }
+                }
                 if code == ENODEV || code == ENXIO || code == ESTALE { return .unavailable("所在卷或网络位置不可用") }
                 return .unknown("无法读取路径（系统错误 \(code)），不能认定已经卸载")
             }
@@ -116,18 +132,27 @@ public final class MacCatalogService {
     public init() {}
 
     public func scan() throws -> CatalogSnapshot {
+        let started = Date()
         let result = try CommandRunner.run(Self.tool, ["-dump"])
+        let dumpedAt = Date()
         guard result.status == 0 else { throw CleanerError.message("无法读取应用注册信息：\(result.error.prefix(1000))") }
         let parsed = DumpParser.parse(result.output)
+        let parsedAt = Date()
         guard parsed.isRecognized else {
             throw CleanerError.message("无法识别此 macOS 版本的应用注册输出。未进行清理，请导出系统版本信息并等待兼容更新。")
         }
         let defaultIDs = DefaultProtection.bundleIdentifiers(for: parsed.records)
-        let entries = parsed.records.map {
-            CleanupPolicy.classify($0, presence: LocalPathProbe.inspect($0.path), defaultBundleIDs: defaultIDs)
+        let defaultsAt = Date()
+        let entries = parsed.records.map { record -> CatalogEntry in
+            let preflight = CleanupPolicy.classify(record, presence: .unknown("尚未检查路径"), defaultBundleIDs: defaultIDs)
+            if preflight.status == .unavailable { return preflight }
+            return CleanupPolicy.classify(record, presence: LocalPathProbe.inspect(record.path), defaultBundleIDs: defaultIDs)
         }.sorted { lhs, rhs in
             if lhs.canClean != rhs.canClean { return lhs.canClean }
             return lhs.record.name.localizedStandardCompare(rhs.record.name) == .orderedAscending
+        }
+        if ProcessInfo.processInfo.environment["OWC_DIAGNOSTIC_TIMING"] == "1" {
+            print("SCAN_TIMING dump=\(dumpedAt.timeIntervalSince(started)) parse=\(parsedAt.timeIntervalSince(dumpedAt)) defaults=\(defaultsAt.timeIntervalSince(parsedAt)) paths=\(Date().timeIntervalSince(defaultsAt)) records=\(entries.count)")
         }
         return CatalogSnapshot(entries: entries, rawDump: result.output,
                                rejectedBlocks: parsed.rejectedBlocks, createdAt: Date())
@@ -204,9 +229,20 @@ private enum DefaultProtection {
                 }
             }
         }
+        let preferenceURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
+            "Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist")
+        if let data = try? Data(contentsOf: preferenceURL),
+           let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+           let handlers = plist["LSHandlers"] as? [[String: Any]] {
+            for handler in handlers {
+                for (key, value) in handler where key.hasPrefix("LSHandlerRole") {
+                    if let identifier = value as? String { identifiers.insert(identifier.lowercased()) }
+                }
+            }
+        }
         // Also query effective defaults for each missing record's declared bindings.
-        for record in records where record.systemReportedMissing {
-            for binding in record.bindings {
+        let bindings = Set(records.filter(\.systemReportedMissing).flatMap(\.bindings))
+        for binding in bindings {
                 var typeID: String?
                 if binding.hasPrefix(".") { typeID = UTType(filenameExtension: String(binding.dropFirst()))?.identifier }
                 else if binding.contains("/") { typeID = UTType(mimeType: binding)?.identifier }
@@ -224,7 +260,6 @@ private enum DefaultProtection {
                         identifiers.insert((value as String).lowercased())
                     }
                 }
-            }
         }
         return identifiers
     }

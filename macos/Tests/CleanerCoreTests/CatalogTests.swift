@@ -428,4 +428,64 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(entry.status, .unknown)
         XCTAssertFalse(entry.canClean)
     }
+
+    func testModernBundleNameWithHexRecordIDSupportsSpacesParenthesesAndChinese() throws {
+        for name in ["Example Utility", "Example (Preview)", "示例 工具（测试）"] {
+            let fixture = """
+            ----------------------------------------
+            bundle id: \(name) (0x3cc)
+            path: /Users/fixture/Applications/\(name).app
+            name: \(name)
+            identifier: org.example.cleanerfixture
+            Container mount state: mounted
+            Bundle node not found on disk
+            """
+            let parsed = try parseOne(fixture)
+            XCTAssertEqual(parsed.recordID, "0x3cc")
+            XCTAssertEqual(parsed.name, name)
+            XCTAssertEqual(parsed.path, "/Users/fixture/Applications/\(name).app")
+            XCTAssertEqual(parsed.bundleIdentifier, identifier)
+            XCTAssertTrue(parsed.systemReportedMissing)
+            XCTAssertNil(parsed.parseIssue)
+            XCTAssertTrue(CleanupPolicy.classify(parsed, presence: .missing).canClean)
+        }
+    }
+
+    func testModernBareBundleNameWithoutHexRecordIDRemainsUnknown() throws {
+        let fixture = """
+        ----------------------------------------
+        bundle id: 示例 工具 (Preview)
+        path: /Users/fixture/Applications/示例 工具 (Preview).app
+        name: 示例 工具 (Preview)
+        identifier: org.example.cleanerfixture
+        Container mount state: mounted
+        Bundle node not found on disk
+        """
+        let parsed = try parseOne(fixture)
+        XCTAssertNotNil(parsed.parseIssue)
+        let entry = CleanupPolicy.classify(parsed, presence: .missing)
+        XCTAssertEqual(entry.status, .unknown)
+        XCTAssertFalse(entry.canClean)
+    }
+
+    func testChangedModernHexRecordIDAfterPreviewCancelsCleanup() throws {
+        let fixture = """
+        ----------------------------------------
+        bundle id: 示例 工具 (Preview) (0x3cc)
+        path: /Users/fixture/Applications/示例 工具 (Preview).app
+        name: 示例 工具 (Preview)
+        identifier: org.example.cleanerfixture
+        Container mount state: mounted
+        Bundle node not found on disk
+        """
+        let planned = try parseOne(fixture)
+        let changed = try parseOne(fixture.replacingOccurrences(of: "(0x3cc)", with: "(0x3cd)"))
+        XCTAssertEqual(planned.recordID, "0x3cc")
+        XCTAssertEqual(changed.recordID, "0x3cd")
+        XCTAssertEqual(planned.path, changed.path)
+        XCTAssertEqual(planned.bundleIdentifier, changed.bundleIdentifier)
+        let current = CleanupPolicy.classify(changed, presence: .missing)
+        XCTAssertTrue(current.canClean)
+        XCTAssertThrowsError(try CleanupPolicy.revalidate(planned, current: [current]))
+    }
 }

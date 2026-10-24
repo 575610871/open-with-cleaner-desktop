@@ -10,15 +10,17 @@ public struct LaunchRecord: Codable, Equatable, Identifiable {
     public let bindings: [String]
     public let systemReportedMissing: Bool
     public let containerMountState: String
+    public let containerPath: String
     public var parseIssue: String?
 
     public init(recordID: String, name: String, path: String, bundleIdentifier: String,
                 version: String = "", bindings: [String] = [], systemReportedMissing: Bool = false,
-                parseIssue: String? = nil, containerMountState: String = "") {
+                parseIssue: String? = nil, containerMountState: String = "", containerPath: String = "") {
         self.recordID = recordID; self.name = name; self.path = path
         self.bundleIdentifier = bundleIdentifier; self.version = version
         self.bindings = bindings; self.systemReportedMissing = systemReportedMissing
         self.containerMountState = containerMountState
+        self.containerPath = containerPath
         self.parseIssue = parseIssue
     }
 }
@@ -85,24 +87,36 @@ public enum DumpParser {
             let path = removeAddressSuffix(pathValue)
             guard path.hasPrefix("/") else { rejected += 1; continue }
             let identifier = removeAddressSuffix(fields["identifier"]?.first ?? "")
-            let recordID = removeAddressSuffix(fields["bundle id"]!.first!)
+            let rawID = fields["bundle id"]!.first!
+            let strippedID = removeAddressSuffix(rawID)
+            let recordID: String
             var issue: String?
-            if recordID.isEmpty || !recordID.allSatisfy({ $0.isNumber }) { issue = "无法识别系统记录编号" }
+            if !strippedID.isEmpty && strippedID.allSatisfy({ $0.isNumber }) { recordID = strippedID }
+            else if rawID.range(of: #"^.+\s+\(0x[0-9a-fA-F]{1,16}\)$"#, options: .regularExpression) != nil,
+                    let hex = rawID.range(of: #"0x[0-9a-fA-F]{1,16}(?=\)$)"#, options: .regularExpression) {
+                recordID = String(rawID[hex])
+            } else { recordID = strippedID; issue = "无法识别系统记录编号" }
             if fields["identifier", default: []].count != 1 ||
                 identifier.range(of: #"^[A-Za-z0-9][A-Za-z0-9._-]*$"#, options: .regularExpression) == nil ||
                 identifier.lowercased() == "null" { issue = "应用标识缺失或有歧义" }
-            if fields["container mount state", default: []].count > 1 { issue = "容器挂载状态有歧义" }
+            let mountStates = (fields["container mount state"] ?? []) + (fields["mount state"] ?? [])
+            if mountStates.count > 1 { issue = "容器挂载状态有歧义" }
+            if fields["container", default: []].count > 1 { issue = "容器路径有歧义" }
             let name = [fields["displayname"]?.first, fields["name"]?.first].compactMap { $0 }
                 .first { !$0.isEmpty && !["(null)", "null", "#"].contains($0.lowercased()) }
                 ?? URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
-            let bindings = (fields["bindings"] ?? []).flatMap { value in
-                value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            let bindingValues = (fields["bindings"] ?? []) + (fields["claimed utis"] ?? [])
+            var bindings = bindingValues.flatMap { value in
+                value.split(separator: ",").map { removeAddressSuffix($0.trimmingCharacters(in: .whitespaces)) }
             }.filter { !$0.isEmpty }
+            bindings += (fields["claimed schemes"] ?? []).flatMap { $0.split(separator: ",") }
+                .map { $0.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ":", with: "") + ":" }
             records.append(LaunchRecord(recordID: recordID, name: name, path: path,
-                bundleIdentifier: identifier, version: fields["version"]?.first ?? "",
+                bundleIdentifier: identifier, version: String((fields["versionstring"]?.first ?? fields["displayversion"]?.first ?? fields["version"]?.first ?? "").prefix(120)),
                 bindings: bindings,
                 systemReportedMissing: block.joined(separator: "\n").contains("Bundle node not found on disk"),
-                parseIssue: issue, containerMountState: fields["container mount state"]?.first ?? ""))
+                parseIssue: issue, containerMountState: mountStates.first ?? "",
+                containerPath: removeAddressSuffix(fields["container"]?.first ?? "")))
         }
         let groups = Dictionary(grouping: records, by: \.path)
         let unique = groups.map { _, samePath -> LaunchRecord in
@@ -148,6 +162,9 @@ public enum CleanupPolicy {
         }
         if !record.containerMountState.isEmpty && record.containerMountState.lowercased() != "mounted" {
             return entry(.unavailable, "系统记录的容器状态不是已挂载：\(record.containerMountState)")
+        }
+        if !record.containerPath.isEmpty && !["/", "/System/Volumes/Data"].contains(record.containerPath) {
+            return entry(.unavailable, "系统记录指向其他容器或磁盘，本版保留：\(record.containerPath)")
         }
         let uncertainRoots = ["/Volumes", "/Network", "/net", "/home"]
         if uncertainRoots.contains(where: { record.path == $0 || record.path.hasPrefix($0 + "/") }) {

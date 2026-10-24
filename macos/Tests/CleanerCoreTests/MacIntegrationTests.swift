@@ -24,9 +24,7 @@ final class MacIntegrationTests: XCTestCase {
         }
         let info: [String: Any] = [
             "CFBundleIdentifier": identifier, "CFBundleName": "OpenWithCleaner CI Fixture",
-            "CFBundlePackageType": "APPL", "CFBundleExecutable": "fixture", "CFBundleVersion": "1",
-            "CFBundleDocumentTypes": [["CFBundleTypeName": "OWC Test", "CFBundleTypeRole": "Viewer",
-                "CFBundleTypeExtensions": ["owc-\(token)"]]]
+            "CFBundlePackageType": "APPL", "CFBundleExecutable": "fixture", "CFBundleVersion": "1"
         ]
         let plist = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
         try plist.write(to: contents.appendingPathComponent("Info.plist"))
@@ -38,11 +36,13 @@ final class MacIntegrationTests: XCTestCase {
         let service = MacCatalogService()
         let installed = try service.scan()
         let installedRecord = try XCTUnwrap(installed.entries.first { $0.record.path == app.path })
+        print("FIXTURE_INSTALLED id=\(installedRecord.record.recordID) container=\(installedRecord.record.containerPath) mount=\(installedRecord.record.containerMountState) status=\(installedRecord.status) reason=\(installedRecord.reason)")
         XCTAssertEqual(installedRecord.status, .installed)
         XCTAssertFalse(installedRecord.canClean)
         try FileManager.default.removeItem(at: app)
         let missing = try service.scan()
         let residual = try XCTUnwrap(missing.entries.first { $0.record.path == app.path })
+        print("FIXTURE_MISSING id=\(residual.record.recordID) container=\(residual.record.containerPath) mount=\(residual.record.containerMountState) status=\(residual.status) reason=\(residual.reason)")
         XCTAssertTrue(residual.record.systemReportedMissing, "System dump must identify the missing fixture")
         XCTAssertTrue(residual.canClean, residual.reason)
         let summary = try service.cleanup(residual.record)
