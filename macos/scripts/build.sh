@@ -37,7 +37,7 @@ iconutil --convert icns --output "$app_dir/Contents/Resources/AppIcon.icns" "$ic
 # and does not claim Apple notarization.
 codesign --force --sign - --timestamp=none --options runtime "$app_dir"
 codesign --verify --deep --strict --verbose=2 "$app_dir"
-lipo -verify_arch arm64 x86_64 "$app_dir/Contents/MacOS/OpenWithCleanerMac"
+lipo "$app_dir/Contents/MacOS/OpenWithCleanerMac" -verify_arch arm64 x86_64
 
 # Keep an unpacked app for CI's launch check as well as the distributable ZIP.
 ditto "$app_dir" "$dist_dir/$app_name.app"
