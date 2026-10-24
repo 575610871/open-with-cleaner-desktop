@@ -2,7 +2,9 @@
 
 一个带有苏芳配色的 Windows「打开方式」管理工具。选择桌面应用，预览它的文件关联候选，备份后清理，并在需要时恢复。
 
-**[下载最新便携版](https://github.com/575610871/open-with-cleaner-desktop/releases/latest)**
+**[下载 Windows v1.3.0 便携版](https://github.com/575610871/open-with-cleaner-desktop/releases/tag/v1.3.0)**
+
+**macOS 版：** 原生 SwiftUI 版本位于 [macos/](macos/README.md)，使用相同苏芳配色。它检查 Launch Services 的应用记录，只定向注销确认失效的本地路径。Mac 版保存操作记录，不提供 Windows 版的注册表备份恢复；两个平台分别构建与编号。
 
 ![示例界面](docs/preview.png)
 
