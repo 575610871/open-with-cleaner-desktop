@@ -1,0 +1,22 @@
+# Local build and test output
+build/
+dist/
+*.exe
+*.dll
+*.pdb
+*.zip
+*.tmp
+*.log
+**/test-tmp/
+**/catalog-test-tmp/
+
+# Machine-specific backups and exported diagnostics
+OpenWithBackup_*.xml
+**/Backups/
+*诊断*.txt
+
+# Editor files
+.vs/
+.vscode/
+*.user
+*.suo
