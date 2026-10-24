@@ -1,6 +1,8 @@
 import SwiftUI
 import AppKit
 import CleanerCore
+import UniformTypeIdentifiers
+import Darwin
 
 @MainActor
 final class CleanerViewModel: ObservableObject {
@@ -137,6 +139,20 @@ final class CleanerViewModel: ObservableObject {
             let snapshot = try await Task.detached { try MacCatalogService().scan() }.value
             apply(snapshot)
             guard !records.isEmpty else { throw CleanerError.message("No application records") }
+            if let screenshotPath = ProcessInfo.processInfo.environment["OWC_SCREENSHOT_PATH"] {
+                selectedID = nil
+                NSApp.activate(ignoringOtherApps: true)
+                try await Task.sleep(nanoseconds: 700_000_000)
+                guard let view = NSApp.windows.first(where: { $0.isVisible })?.contentView,
+                      let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+                    throw CleanerError.message("Cannot capture native app preview")
+                }
+                view.cacheDisplay(in: view.bounds, to: bitmap)
+                guard let image = bitmap.representation(using: .png, properties: [:]) else {
+                    throw CleanerError.message("Cannot encode native app preview")
+                }
+                try image.write(to: URL(fileURLWithPath: screenshotPath), options: .atomic)
+            }
             print("SMOKE_OK: native UI started; read-only scan returned \(records.count) records")
             fflush(stdout); Darwin.exit(0)
         } catch {

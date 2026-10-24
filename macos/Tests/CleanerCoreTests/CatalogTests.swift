@@ -359,4 +359,73 @@ final class CatalogTests: XCTestCase {
         let fresh = CleanupPolicy.classify(record(systemMissing: false), presence: .missing)
         XCTAssertThrowsError(try CleanupPolicy.revalidate(record(), current: [fresh]))
     }
+
+    func testNullAndPlaceholderIdentifiersAreNeverCleanable() throws {
+        for bundleID in ["(null) (0x0)", "(null)", "null", "NULL", "#"] {
+            let parsed = try parseOne(dump(bundleID: bundleID))
+            XCTAssertNotNil(parsed.parseIssue, "Placeholder identifier was accepted: \(bundleID)")
+            let entry = CleanupPolicy.classify(parsed, presence: .missing)
+            XCTAssertEqual(entry.status, .unknown)
+            XCTAssertFalse(entry.canClean)
+        }
+    }
+
+    func testIdentifierContainingWhitespaceCannotBeCleaned() throws {
+        for bundleID in ["org.example.invalid identifier", "org.example.\tinvalid", "org.example.invalid\u{00A0}identifier"] {
+            let parsed = try parseOne(dump(bundleID: bundleID))
+            XCTAssertNotNil(parsed.parseIssue)
+            XCTAssertFalse(CleanupPolicy.classify(parsed, presence: .missing).canClean)
+        }
+    }
+
+    func testPlaceholderDisplayNameFallsBackToUsableName() throws {
+        for displayName in ["(null)", "null", "#", ""] {
+            let parsed = try parseOne(dump() + "\ndisplayname: \(displayName)")
+            XCTAssertEqual(parsed.name, "Example")
+        }
+    }
+
+    func testPlaceholderDisplayNameAndNameFallBackToFilename() throws {
+        let fixture = """
+        bundle id: 42
+        path: /Users/fixture/Applications/演示 工具.app
+        identifier: org.example.fixture
+        displayname: (null)
+        name: #
+        Bundle node not found on disk
+        """
+        XCTAssertEqual(try parseOne(fixture).name, "演示 工具")
+    }
+
+    func testUnmountedContainerRetainsMissingAppAtCustomUserPath() throws {
+        let parsed = try parseOne(dump(path: "/Users/fixture/Custom Mount/Example.app") + "\nContainer mount state: not mounted")
+        XCTAssertEqual(parsed.containerMountState, "not mounted")
+        let entry = CleanupPolicy.classify(parsed, presence: .missing)
+        XCTAssertEqual(entry.status, .unavailable)
+        XCTAssertFalse(entry.canClean)
+    }
+
+    func testMountedContainerAllowsOtherwiseConfirmedLocalMissingApp() throws {
+        let parsed = try parseOne(dump() + "\nContainer mount state: mounted")
+        XCTAssertEqual(parsed.containerMountState, "mounted")
+        let entry = CleanupPolicy.classify(parsed, presence: .missing)
+        XCTAssertEqual(entry.status, .missing)
+        XCTAssertTrue(entry.canClean)
+    }
+
+    func testAmbiguousContainerMountStatesCannotBeCleaned() throws {
+        let parsed = try parseOne(dump() + "\nContainer mount state: mounted\nContainer mount state: not mounted")
+        XCTAssertNotNil(parsed.parseIssue)
+        XCTAssertFalse(CleanupPolicy.classify(parsed, presence: .missing).canClean)
+    }
+
+    func testInvalidUTF8ReplacementCharacterMakesPathUncleanable() throws {
+        let path = "/Users/fixture/Applications/Damaged\u{FFFD}Name.app"
+        let parsed = try parseOne(dump(path: path))
+        XCTAssertEqual(parsed.path, path)
+        XCTAssertNotNil(CleanupPolicy.pathProblem(path))
+        let entry = CleanupPolicy.classify(parsed, presence: .missing)
+        XCTAssertEqual(entry.status, .unknown)
+        XCTAssertFalse(entry.canClean)
+    }
 }

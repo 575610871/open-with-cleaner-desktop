@@ -1,6 +1,7 @@
 import SwiftUI
 
 @main
+@MainActor
 struct OpenWithCleanerMacApp: App {
     @StateObject private var model = CleanerViewModel()
 

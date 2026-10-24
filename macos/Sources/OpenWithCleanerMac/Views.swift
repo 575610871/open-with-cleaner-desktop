@@ -8,6 +8,7 @@ enum SuohTheme {
     static let ink = Color(red: 48.0 / 255.0, green: 40.0 / 255.0, blue: 43.0 / 255.0)
 }
 
+@MainActor
 struct CleanerMainView: View {
     @ObservedObject var model: CleanerViewModel
 
@@ -292,7 +293,7 @@ struct CleanerMainView: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if entry.status == .installed {
+            if entry.applicationExists {
                 Text("应用文件仍然存在，系统可以再次注册它。本版不会将已安装应用永久隐藏。")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -309,7 +310,7 @@ struct CleanerMainView: View {
             .controlSize(.large)
             .disabled(model.isBusy || !entry.canClean)
 
-            if entry.status == .installed {
+            if entry.applicationExists {
                 Button("在 Finder 中显示", action: model.revealSelected)
                     .disabled(model.isBusy)
             }

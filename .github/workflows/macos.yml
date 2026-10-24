@@ -38,6 +38,8 @@ jobs:
       - name: Build universal app
         run: bash macos/scripts/build.sh
       - name: Launch packaged app
+        env:
+          OWC_SCREENSHOT_PATH: ${{ github.workspace }}/macos/dist/preview-macos.png
         run: |
           python3 - <<'PY'
           import subprocess
@@ -52,5 +54,37 @@ jobs:
           path: |
             macos/dist/*.zip
             macos/dist/SHA256SUMS.txt
+            macos/dist/preview-macos.png
           if-no-files-found: error
           retention-days: 30
+
+  apple-silicon:
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Apple Silicon host
+        run: test "$(uname -m)" = arm64
+      - name: Native Apple Silicon tests
+        run: swift test --package-path macos
+      - name: Apple Silicon Launch Services integration test
+        env:
+          OWC_RUN_INTEGRATION: '1'
+        run: swift test --package-path macos --filter MacIntegrationTests
+      - uses: actions/download-artifact@v4
+        with:
+          name: open-with-cleaner-desktop-suoh-edition-0.1.0-macos-universal
+          path: macos-download
+      - name: Verify and launch the same universal app
+        run: |
+          cd macos-download
+          shasum -a 256 -c SHA256SUMS.txt
+          ditto -x -k open-with-cleaner-desktop-suoh-edition-0.1.0-macos-universal.zip unpacked
+          codesign --verify --deep --strict "unpacked/Open With Cleaner Desktop Suoh Edition.app"
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+          executable = Path("unpacked/Open With Cleaner Desktop Suoh Edition.app/Contents/MacOS/OpenWithCleanerMac")
+          subprocess.run([str(executable.resolve()), "--smoke-test"], timeout=30, check=True)
+          PY
