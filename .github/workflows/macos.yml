@@ -1,0 +1,56 @@
+name: macOS build and test
+
+on:
+  push:
+    paths:
+      - 'macos/**'
+      - '.github/workflows/macos.yml'
+  pull_request:
+    paths:
+      - 'macos/**'
+      - '.github/workflows/macos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          sw_vers
+          swift --version
+          xcodebuild -version
+      - name: Core tests
+        run: swift test --package-path macos
+      - name: Isolated Launch Services integration test
+        env:
+          OWC_RUN_INTEGRATION: '1'
+        run: swift test --package-path macos --filter MacIntegrationTests
+      - name: Build universal app
+        run: bash macos/scripts/build.sh
+      - name: Launch packaged app
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+          executable = Path("macos/dist/Open With Cleaner Desktop Suoh Edition.app/Contents/MacOS/OpenWithCleanerMac")
+          result = subprocess.run([str(executable.resolve()), "--smoke-test"], timeout=30, check=True)
+          PY
+      - name: Upload macOS download
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-with-cleaner-desktop-suoh-edition-0.1.0-macos-universal
+          path: |
+            macos/dist/*.zip
+            macos/dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
